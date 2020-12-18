@@ -1,7 +1,7 @@
 library(BSgenome.Hsapiens.UCSC.hg19)
 library(seqTools)
 # data normalization
-load('C:\\Users\\15460\\Desktop\\0817_sites_mapped_w100_md65_cleaned.rsav',
+load('0817_sites_mapped_w100_md65_cleaned.rsav',
      verbose = T)
 df <- sites
 # keep only double sites (CTCF & RAD21) and triple sites (CTCF & RAD21 & TOP2B)
@@ -45,3 +45,5 @@ for (i in 1:nrow(string4)) {
 string4 <- string4[string4$complete, 1:2]
 
 string_500_rc <- rbind(string3, string4)
+write.csv(string_500_rc, file = "string_500_rc.csv", row.names = FALSE)
+
