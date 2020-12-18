@@ -1,4 +1,58 @@
-# ======= build CNN model =============================================
+library(keras)
+library(onehot)
+library(ggplot2)
+library(tensorflow)
+library(pryr)
+library(pROC)
+tf$compat$v1$disable_eager_execution()
+set.seed(2020)
+data <- read.csv("string_500_rc.csv")
+# if double == 0, if triple == 1
+data$type <- ifelse(nchar(data$order)<=11, 0,1)
+data_double <- data[data$type == 0, ]
+data_triple <- data[data$type == 1, ]
+# downsample
+data <- rbind(data_triple, data_double[sample(1:sum(data$type == 0), sum(data$type == 1)), ])
+# split into training set and test set
+split.index <- sample(1:nrow(data), 0.8*nrow(data))
+data.train <- data[split.index,]
+data.test <- data[-split.index,]
+
+c(train_data, train_labels) %<-% data.train[, c("x", "type")]
+c(test_data, test_labels) %<-% data.test[, c("x", "type")]
+
+# train: transform into array
+max_len = 500
+array <- array(NA, dim=c(nrow(data.train),max_len,4))
+for(i in 1: nrow(data.train)){
+  try <- train_data[i]
+  split <- unlist(strsplit(try, split = NULL))
+df <- data.frame(ID = 1: length(split), base = as.factor(split))
+onehot <- predict(onehot(df), df)
+array[i, ,1:4] <- onehot[1:max_len, -1]
+}
+
+# reshape the array for CNN
+train_array <- array_reshape(array,c(nrow(data.train), max_len, 4))
+# ==========================================================
+# test
+test_array <- array(0, dim=c(nrow(data.test),max_len,4))
+  
+  for(i in 1: nrow(data.test)){
+    try <- test_data[i]
+    split <- unlist(strsplit(try, split = NULL))
+    df <- data.frame(ID = 1: length(split), base = as.factor(split))
+    # one-hot encoding
+    onehot <- predict(onehot(df), df)
+    # ACGT
+    test_array[i, ,1:4] <- onehot[1:max_len, -1]
+  }
+
+# reshape the array
+test_array <- array_reshape(test_array, c(nrow(data.test), max_len, 4))
+# ============================================================
+# ======= build CNN model ====================================
+# ============================================================
 model <- keras_model_sequential() %>%
   # conv 1
   layer_conv_1d(
@@ -58,4 +112,4 @@ ggroc(gc_pROC, alpha = 0.5, colour = "black", linetype = 1, size = 1)+
   geom_segment(aes(x = 1, xend = 0, y = 0, yend = 1), color="grey", linetype="dashed")+
   annotate("text", x = 0.1, y = 0.1, vjust = 0,label = paste("AUC =",sprintf("%.3f",gc_pROC$auc)))+
   theme(plot.title = element_text(hjust = 0.5))
-#=========================== CNN END ==========================================================
+#=========================== CNN ENDS ==========================================================
