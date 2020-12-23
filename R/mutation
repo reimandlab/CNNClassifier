@@ -1,0 +1,152 @@
+# ============ 1.mutation data (ranges) ===================
+load('maf_Liver-HCC.rsav')
+mut <- maf
+# get ranges
+library(BSgenome.Hsapiens.UCSC.hg19)
+library(seqTools)
+
+mut_ranges <- makeGRangesFromDataFrame(mut[, 1:5], T)
+
+# ============= 2.double & triple data (ranges)============
+# data normalization
+load('C:\\Users\\15460\\Desktop\\0817_sites_mapped_w100_md65_cleaned.rsav',
+     verbose = T)
+df <- sites
+head(df)
+table(df$mapped_order)
+# keep only double sites (CTCF & RAD21) and triple sites (CTCF & RAD21 & TOP2B)
+df2 <-
+  df[df$mapped_order == "CTCF-RAD21" |
+       df$mapped_order == "RAD21-CTCF", ]
+df3 <- df[nchar(df$mapped_order) == 16, ]
+data <- rbind(df2, df3)
+data$length <- data$end - data$start + 1
+# mid point
+data$mid <- round(rowMeans(data[, c("start", "end")]))
+# normalize data (take the midpoint and extend both ways) 4
+max_len = 500
+data$start <- data$mid - max_len / 2 + 1
+data$end <- data$mid + max_len / 2
+site_ranges <-
+  makeGRangesFromDataFrame(data[, c(1:3, 7)], keep.extra.columns = T)
+
+# =======================
+# find intersection
+# overlap index
+overlap_index = findOverlaps(mut_ranges, # query
+                             site_ranges)
+intersect <-
+  pintersect(mut_ranges[queryHits(overlap_index)], site_ranges[subjectHits(overlap_index)])
+df_mut <-
+  data.frame(mut_ranges[queryHits(overlap_index), ], site_ranges[subjectHits(overlap_index), ])
+
+# delete those with "-" in ref and alt
+df_mut <- df_mut[df_mut$ref != "-" & df_mut$alt != "-",]
+
+
+# ================================================================
+# ============================
+# 1. site -> one-hot encoding
+# ============================
+library(BSgenome.Hsapiens.UCSC.hg19)
+library(seqTools)
+sites <- df_mut[, c(8:10, 13)]
+colnames(sites) <- c("chr", "start", "end", "type")
+sites$type <- ifelse(nchar(sites$type)< 14, 0, 1)
+ranges <- makeGRangesFromDataFrame(sites)
+# fetch the DNA content of each of the sites 
+string <- getSeq(Hsapiens, ranges)
+site_string <- data.frame(x =  as.data.frame(string))
+
+site_data <- cbind(site_string, sites)
+double_index <- which(site_data$type == 0)
+triple_index <- which(site_data$type == 1)
+cat("# double", length(double_index))
+cat("# triple", length(triple_index))
+
+# one-hot encoding
+max_len = 500
+site_array <- array(NA, dim=c(nrow(site_string),max_len,4))
+
+for(i in 1: nrow(site_string)){
+ # print(i)
+  try <- site_string[i,]
+  onehot <- oneHot(try)
+  # ACGT
+  site_array[i, , ] <- t(onehot)
+}
+# reshape the array
+site_array <- array_reshape(site_array,c(nrow(site_string), max_len, 4))
+# test
+# ==================
+# 2. saliency score
+# ==================
+output <- model$output[,1] 
+input_layer <- model$input
+# compute gradients
+grads <- k_gradients(output, input_layer)[[1]]
+# mean in each filter
+# pooled_grads <- k_mean(grads, axis = c(1,2))  
+# iterate function
+iterate <- k_function(list(model$input),                                   
+                      list(grads, input_layer[1,,]))
+# ==================================================================================
+score_triple_site <- matrix(NA,length(triple_index), 500)
+for (j in 1:length(triple_index)){
+    # print(j)
+    seq <- site_array[triple_index[j], , , drop=F]
+  c(grads_value, layer_output_value) %<-% iterate(list(seq))  
+    # saliency score = activation * gradients 
+     score <- grads_value[1,,] * layer_output_value
+    for (i in 1:500){
+  score_triple_site[j, i] <- score[i, ][which(layer_output_value[i,] == 1)]
+    }
+    
+}
+# =============================
+# 3. report high score position
+# =============================
+df_mut$mut_pos <- df_mut$start - df_mut$start.1 + 1
+df_mut$mut_pos[5523] <- df_mut$end - df_mut$start.1 + 1
+df_mut$mut_score <- rep(NA, nrow(df_mut))
+for (i in 1:nrow(df_mut)){
+  # print(i)
+  obs <- i
+  pos <- df_mut$mut_pos[i]
+  if (site_data$type[i] == 0){
+    df_mut$mut_score[i] <- score_double_site[which(double_index == obs),pos]
+  }
+  else {
+    df_mut$mut_score[i] <- score_triple_site[which(triple_index == obs),pos]
+  }
+}
+# random positions
+set.seed(2020)
+for (i in 1:nrow(df_mut)){
+  # print(i)
+  obs <- i
+  pos <- sample(1:500, 1)
+  if (site_data$type[i] == 0){ 
+    df_mut$rand_score[i] <- score_double_site[which(double_index == obs),pos]
+  }
+  else {
+    df_mut$rand_score[i] <- score_triple_site[which(triple_index == obs),pos]
+  }
+}
+
+df_score <- data.frame(type = rep(c("mutation", "random"), each = nrow(site_data)), score = c(df_mut$mut_score,df_mut$rand_score))
+
+# boxplot
+ggplot(df_score, aes(x=type, y=score, color = type)) +
+  geom_boxplot()
+# distribution plot 
+ggplot(df_score, aes(x=score, fill=type)) +
+    geom_histogram(alpha=0.5, position = 'identity', binwidth = 0.001)+
+  scale_fill_manual(values=c("#69b3a2", "#404080")) +
+    ggtitle("Saliency Score for Mutations and Random Sites") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+# ======================================= test ===============================
+library(ggpubr)
+# wilcoxon test
+wilcox.test(df_score$score[df_score$type == "mutation"], df_score$score[df_score$type == "random"], alternative = "two.sided")
