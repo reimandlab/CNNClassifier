@@ -1,3 +1,22 @@
+# hits
+# ===========================
+library(Biostrings)
+# scan each motif through all the sequences
+number = 16 # number of motifs
+hits <-list()
+scan <- function(i, obs){
+  countPWM(pwms[[i]], train_data[obs],min.score="85%")
+}
+
+for (i in 1:number){
+  print(i)
+  nhit <- lapply(1:length(train_data), function(obs){scan(i,obs)})
+  nhit <- do.call(c,nhit)
+  hits[[i]] <- nhit
+}
+
+
+
 for (motif in 1:16) {
   print(motif)
   # ======= position for triple sites =====
@@ -42,8 +61,14 @@ for (motif in 1:16) {
   )
 }
 # plot distribution of each motif
+fname = "data/motif_positions.pdf"
+pdf (fname)
 library(gridExtra)
 grid.arrange(grobs = list(p1, p2, p3, p4), cols = 4)
 grid.arrange(grobs = list(p5, p6, p7, p8), cols = 4)
 grid.arrange(grobs = list(p9, p10, p11, p12), cols = 4)
 grid.arrange(grobs = list(p13, p14, p15, p16), cols = 4)
+dev.off()
+
+system(paste("open ", fname))
+

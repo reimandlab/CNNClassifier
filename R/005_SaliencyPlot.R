@@ -36,8 +36,13 @@ df <-
     obs = rep(1:dim(score_triple)[1], each = 500),
     score = as.vector(t(score_triple))
   )
+  
+
+fname = "data/saliency_map.pdf"
+pdf(fname)
+
 # plot saliency map
-ggplot(df, aes(position, obs, fill = score)) +
+p1 = ggplot(df, aes(position, obs, fill = score)) +
   geom_tile() +
   scale_fill_distiller(limit = c(-0.02, 0.02), palette = "RdYlBu") +
   ggtitle("Saliency Score for Triple Sites")
@@ -45,6 +50,13 @@ ggplot(df, aes(position, obs, fill = score)) +
 # average score
 df <- data.frame(pos = 1:500, score = colMeans(score_triple))
 # plot average score
-ggplot(df, aes(x = pos, y = score)) + geom_point() +
+p2 = ggplot(df, aes(x = pos, y = score)) + geom_point() +
   geom_smooth(method = 'auto') +
   ggtitle("Average Score for Triple Sites")
+  
+print(p1)
+print(p2)
+
+
+dev.off()
+system(paste("open", fname))

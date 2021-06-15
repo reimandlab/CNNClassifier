@@ -1,14 +1,17 @@
+setwd("~/oicr/top2b_cnn")
 library(BSgenome.Hsapiens.UCSC.hg19)
 library(seqTools)
+
+
 # data normalization
-load('0817_sites_mapped_w100_md65_cleaned.rsav',
+load('data/0817_sites_mapped_w100_md65_cleaned.rsav',
      verbose = T)
 df <- sites
+
+
 # keep only double sites (CTCF & RAD21) and triple sites (CTCF & RAD21 & TOP2B)
-df2 <-
-  df[df$mapped_order == "CTCF-RAD21" |
-       df$mapped_order == "RAD21-CTCF", ]
-df3 <- df[nchar(df$mapped_order) == 16, ]
+df2 <- df[df$general_order == "CTCF-RAD21", ]
+df3 <- df[df$general_order == "CTCF-RAD21-TOP2B", ]
 data <- rbind(df2, df3)
 data$length <- data$end - data$start + 1
 # mid point

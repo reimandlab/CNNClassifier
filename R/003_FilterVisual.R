@@ -1,3 +1,13 @@
+#setwd("~/oicr/top2b_cnn")
+#library(keras)
+#library(onehot)
+#library(ggplot2)
+#library(tensorflow)
+#library(pryr)
+#library(pROC)
+#
+#print(load(file = "data/model.rsav"))
+
 # ==============================================
 input_tensor <- model$input
 activations_fn <- k_function(inputs = list(input_tensor),
@@ -12,22 +22,22 @@ threshold=0.8
 
 all_dna_strings <- list()
 for (filt in 1:dim(activations)[3]){ 
-# activations for filter 
-act <- activations[,,filt]
-act[act < threshold*max(act)] <- 0
-pos.values <- which(act > 0,arr.ind=TRUE)
-test_seqs <- train_data
+	# activations for filter 
+	act <- activations[,,filt]
+	act[act < threshold*max(act)] <- 0
+	pos.values <- which(act > 0,arr.ind=TRUE)
+	test_seqs <- train_data
 
-f <- function(seqq) {
-    temp_str <- test_seqs[pos.values[seqq,1]]
-    temp_idx <- pos.values[seqq,2]
-    strseq <- substr(temp_str, temp_idx, temp_idx+(filter_len-1))
-    return(strseq)
-  }
-
-seqs <- lapply(1:nrow(pos.values), f)
-dna_strings <- do.call(c,seqs)
-all_dna_strings[[filt]] <- dna_strings
+	f <- function(seqq) {
+	    temp_str <- test_seqs[pos.values[seqq,1]]
+	    temp_idx <- pos.values[seqq,2]
+	    strseq <- substr(temp_str, temp_idx, temp_idx+(filter_len-1))
+	    return(strseq)
+	  }
+	
+	seqs <- lapply(1:nrow(pos.values), f)
+	dna_strings <- do.call(c,seqs)
+	all_dna_strings[[filt]] <- dna_strings
 }
 
 # number of sequences for each motif
@@ -62,4 +72,9 @@ lapply(1:number, function(i) {
 })
 
 # arrange the motifs
-ggseqlogo(all_dna_strings, ncol=4)
+fname = "data/motifs.pdf"
+pdf(fname)
+print(ggseqlogo(all_dna_strings, ncol=4))
+dev.off()
+system(paste("open", fname))
+
